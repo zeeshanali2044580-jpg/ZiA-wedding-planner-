@@ -1,5 +1,525 @@
-import { useEffect,useMemo,useState } from 'react';
-import { money,supabase } from './lib/supabase';
-const nav=['Home','Wedding & Events','Smart Gadget Store','Bookings','Orders','Cart','Account'];const cats=['All','Smart Watches','Earbuds','Handsfree','Chargers'];const demo=[{id:'demo-watch',name:'ZIA Pulse Pro',category:'Smart Watches',price:28500,stock_quantity:54,description:'AMOLED smartwatch with health tracking.'},{id:'demo-buds',name:'ZIA Nova Buds',category:'Earbuds',price:16900,stock_quantity:128,description:'Noise-cancelling earbuds with case.'}];
-export default function App(){const [tab,setTab]=useState('Home'),[products,setProducts]=useState(demo),[packages,setPackages]=useState([]),[halls,setHalls]=useState([]),[payments,setPayments]=useState([]),[cart,setCart]=useState([]),[orders,setOrders]=useState([]),[bookings,setBookings]=useState([]),[user,setUser]=useState(null),[query,setQuery]=useState(''),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState('');const flash=x=>{setNotice(x);setTimeout(()=>setNotice(''),2400)};const syncProfile=async u=>{if(u)await supabase.rpc('ensure_customer_profile',{p_full_name:u.user_metadata?.full_name||'',p_phone:u.user_metadata?.phone||''})};const history=async u=>{if(!u)return;const[o,b]=await Promise.all([supabase.from('orders').select('*,order_items(*)').eq('customer_id',u.id).order('created_at',{ascending:false}),supabase.from('event_bookings').select('*,wedding_packages(title)').eq('customer_id',u.id).order('created_at',{ascending:false})]);setOrders(o.data||[]);setBookings(b.data||[])};const load=async()=>{if(!supabase){setLoading(false);return}const[p,w,h,pm,s]=await Promise.all([supabase.from('electronics_products').select('*,electronics_categories(name)').eq('is_active',true),supabase.from('wedding_packages').select('*').eq('is_active',true),supabase.from('wedding_halls').select('*').eq('is_active',true),supabase.from('payment_methods').select('*').eq('is_enabled',true),supabase.auth.getSession()]);if(p.error||w.error){setError('Unable to load live ZIA data.');setLoading(false);return}setProducts((p.data||[]).map(x=>({...x,category:x.electronics_categories?.name||'Smart Gadget Store'})));setPackages(w.data||[]);setHalls(h.data||[]);setPayments(pm.data||[]);const u=s.data.session?.user||null;setUser(u);await syncProfile(u);await history(u);setLoading(false)};useEffect(()=>{load();if(!supabase)return;const auth=supabase.auth.onAuthStateChange((_e,s)=>{const u=s?.user||null;setUser(u);syncProfile(u);history(u)});const ch=supabase.channel('zia-customer-live').on('postgres_changes',{event:'*',schema:'public',table:'electronics_products'},load).on('postgres_changes',{event:'*',schema:'public',table:'wedding_packages'},load).on('postgres_changes',{event:'*',schema:'public',table:'wedding_halls'},load).on('postgres_changes',{event:'*',schema:'public',table:'payment_methods'},load).subscribe();return()=>{auth.data.subscription.unsubscribe();supabase.removeChannel(ch)}},[]);const add=p=>setCart(c=>{const old=c.find(x=>x.id===p.id);flash('Added to cart');return old?c.map(x=>x.id===p.id?{...x,quantity:Math.min(x.quantity+1,p.stock_quantity)}:x):[...c,{...p,quantity:1}]});const shown=useMemo(()=>products.filter(p=>`${p.name} ${p.category}`.toLowerCase().includes(query.toLowerCase())),[products,query]);const total=cart.reduce((a,x)=>a+x.price*x.quantity,0);if(loading)return <Shell tab={tab} setTab={setTab} cart={cart}><State text="Loading ZIA experiences…"/></Shell>;if(error)return <Shell tab={tab} setTab={setTab} cart={cart}><State text={error} action={()=>location.reload()}/></Shell>;return <Shell tab={tab} setTab={setTab} cart={cart}><div className="search-bar"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search products and events…"/></div>{tab==='Home'&&<Home go={setTab} products={products} add={add}/>} {tab==='Smart Gadget Store'&&<Store products={shown} add={add}/>} {tab==='Wedding & Events'&&<Events packages={packages} halls={halls} user={user} flash={flash} refresh={()=>history(user)}/>} {tab==='Cart'&&<Cart cart={cart} setCart={setCart} total={total} user={user} payments={payments} done={()=>{setCart([]);setTab('Orders');flash('Order placed')}}/>}{tab==='Orders'&&<History title="Order history" rows={orders}/>} {tab==='Bookings'&&<History title="Booking history" rows={bookings} booking user={user} flash={flash}/>} {tab==='Account'&&<Account user={user} setUser={setUser} flash={flash}/>} {notice&&<div className="toast">✓ {notice}</div>}</Shell>}
-function Shell({children,tab,setTab,cart}){return <div className="app-shell"><header className="topbar"><div className="brand-mark">Z</div><div><p className="eyebrow">Event and Wedding Planner</p><h1>ZIA Event and Wedding Planner</h1></div></header><nav className="nav-bar">{nav.map(x=><button className={tab===x?'nav-item active':'nav-item'} onClick={()=>setTab(x)} key={x}>{x}{x==='Cart'&&cart.length?` (${cart.length})`:''}</button>)}</nav>{children}<footer className="bottom-actions"><button onClick={()=>alert('ZIA offers are updated weekly')}>Offers</button><button onClick={()=>alert('Support: hello@zia.pk')}>Support</button></footer></div>};function State({text,action}){return <div className="state-card"><p>{text}</p>{action&&<button className="primary-full" onClick={action}>Try again</button>}</div>};function Home({go,products,add}){return <><section className="hero-card"><p className="eyebrow">ZIA Event and Wedding Planner</p><h2>Celebrate beautifully. Shop smarter.</h2><p>Plan meaningful events and discover everyday technology.</p><button onClick={()=>go('Wedding & Events')}>Plan an event</button></section><h3>Smart Gadget Store</h3><div className="card-grid">{products.map(p=><Card item={p} add={()=>add(p)} key={p.id}/>)}</div></>};function Store({products,add}){const [cat,setCat]=useState('All');const list=cat==='All'?products:products.filter(p=>p.category===cat);return <><h2>Smart Gadget Store</h2><div className="chips-row">{cats.map(c=><button className={cat===c?'chip selected':'chip'} onClick={()=>setCat(c)} key={c}>{c}</button>)}</div><div className="card-grid">{list.map(p=><Card item={p} add={()=>add(p)} key={p.id}/>)}</div>{!list.length&&<State text="No products found."/>}</>};function Card({item,add}){return <article className="listing-card"><div className="card-body"><span className="tag">{item.category}</span><h3>{item.name||item.title}</h3><p>{item.description}</p><strong>{money(item.price)}</strong><button onClick={add} disabled={!item.stock_quantity}>Add to cart</button></div></article>};function Events({packages,halls,user,flash,refresh}){const[item,setItem]=useState(null);return <><section className="hero-card"><h2>Wedding & Event Packages</h2><p>Reserve with a 20% advance.</p></section><div className="card-grid">{packages.map(p=><Card item={p} add={()=>setItem(p)} key={p.id}/>)}</div>{item&&<Booking item={item} halls={halls} user={user} close={()=>setItem(null)} flash={flash} refresh={refresh}/>}</>};function Booking({item,halls,user,close,flash,refresh}){const submit=async e=>{e.preventDefault();if(!user)return flash('Sign in from Account before booking');const f=new FormData(e.currentTarget);const{error}=await supabase.from('event_bookings').insert({customer_id:user.id,package_id:item.id,hall_id:f.get('hall_id')||null,event_date:f.get('date'),venue:f.get('venue'),guest_count:Number(f.get('guests')),total_amount:item.price,advance_amount:item.price*.2,remaining_amount:item.price*.8,status:'pending',payment_status:'unpaid'});if(error)flash(error.message);else{await refresh();flash('Booking submitted');close()}};return <div className="modal-backdrop"><form className="modal form-grid" onSubmit={submit}><h3>Book {item.title}</h3><select name="hall_id"><option value="">Choose a hall</option>{halls.map(h=><option key={h.id} value={h.id}>{h.name} · {h.city}</option>)}</select><input name="date" type="date" required min={new Date().toISOString().slice(0,10)}/><input name="venue" required minLength="3" placeholder="Venue"/><input name="guests" required min="1" type="number" placeholder="Guests"/><p>Advance {money(item.price*.2)} · Remaining {money(item.price*.8)}</p><button className="primary-full">Submit booking</button><button type="button" onClick={close}>Cancel</button></form></div>};function Cart({cart,setCart,total,user,payments,done}){const submit=async e=>{e.preventDefault();if(!user)return alert('Sign in from Account first');const f=new FormData(e.currentTarget);const{error}=await supabase.rpc('checkout_cart',{p_items:cart.map(x=>({product_id:x.id,quantity:x.quantity})),p_payment_method_id:f.get('method'),p_delivery_address:f.get('address')});if(error)alert(error.message);else done()};return <section className="panel-block"><h2>Cart</h2>{cart.map(x=><div className="detail-row" key={x.id}><span>{x.name} × {x.quantity}</span><b>{money(x.price*x.quantity)}</b><button onClick={()=>setCart(c=>c.filter(y=>y.id!==x.id))}>Remove</button></div>)}{cart.length?<form className="form-grid" onSubmit={submit}><textarea name="address" required minLength="8" placeholder="Delivery address"/><select name="method" required><option value="">Payment method</option>{payments.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><b>Total {money(total)}</b><button className="primary-full">Place order</button></form>:<State text="Your cart is empty."/>}</section>};function History({title,rows,booking,user,flash}){const pay=async row=>{if(!user)return;const{error}=await supabase.from('payment_records').insert({booking_id:row.id,payment_method_id:null,amount:row.advance_amount,payment_kind:'advance',reference:`BOOK-${row.id.slice(0,8)}`,payment_status:'pending'});flash(error?error.message:'Advance payment submitted for verification')};return <section className="panel-block"><h2>{title}</h2>{rows.length?rows.map(x=><div className="detail-row" key={x.id}><span>{booking?x.wedding_packages?.title||'Event booking':x.id}</span><b>{money(booking?x.advance_amount:x.total)}</b><small>{booking?`${x.event_date} · ${x.status}`:`${x.status} · ${x.payment_status}`}</small>{booking&&<button onClick={()=>pay(x)}>Pay advance</button>}</div>):<State text="No records yet."/>}</section>};function Account({user,setUser,flash}){const[mode,setMode]=useState('signin'),[busy,setBusy]=useState(false);const submit=async e=>{e.preventDefault();setBusy(true);const f=new FormData(e.currentTarget);const action=mode==='signup'?supabase.auth.signUp({email:f.get('email'),password:f.get('password'),options:{data:{full_name:f.get('name'),phone:f.get('phone')}}}):supabase.auth.signInWithPassword({email:f.get('email'),password:f.get('password')});const{data,error}=await action;setBusy(false);if(error)flash(error.message);else{const u=data.user;await supabase.rpc('ensure_customer_profile',{p_full_name:f.get('name')||'',p_phone:f.get('phone')||''});setUser(u);flash(mode==='signup'?'Account created':'Signed in')}};return <section className="panel-block">{user?<><h2>My account</h2><p>{user.email}</p><button onClick={()=>supabase.auth.signOut().then(()=>setUser(null))}>Sign out</button></>:<form className="form-grid" onSubmit={submit}><h2>{mode==='signup'?'Create your ZIA account':'Customer sign in'}</h2>{mode==='signup'&&<><input name="name" required minLength="2" placeholder="Full name"/><input name="phone" required pattern="03[0-9]{9}" placeholder="03XXXXXXXXX"/></>}<input name="email" type="email" required placeholder="Email"/><input name="password" type="password" required minLength="8" placeholder="Password (8+ characters)"/><button className="primary-full" disabled={busy}>{busy?'Working…':mode==='signup'?'Create account':'Sign in'}</button><button type="button" onClick={()=>setMode(mode==='signup'?'signin':'signup')}>{mode==='signup'?'Already have an account? Sign in':'New customer? Create account'}</button></form>}</section>}
+import { useEffect, useMemo, useState } from 'react';
+import { money, supabase } from './lib/supabase';
+
+const nav = ['Home', 'Wedding & Events', 'Smart Gadget Store', 'Bookings', 'Orders', 'Cart', 'Account'];
+const categories = ['All', 'Smart Watches', 'Earbuds', 'Handsfree', 'Chargers'];
+
+const demoProducts = [
+  { id: 'p1', name: 'Auralite Pro X', category: 'Smart Watches', price: 28999, stock: 12, image: '⌚', description: 'Premium smartwatch with health tracking and long battery life.' },
+  { id: 'p2', name: 'EchoBuds Air', category: 'Earbuds', price: 16499, stock: 9, image: '🎧', description: 'Sweat resistant wireless earbuds with deep bass.' },
+  { id: 'p3', name: 'MoveMax 5W', category: 'Handsfree', price: 8999, stock: 15, image: '🎧', description: 'Comfortable lightweight handsfree for daily commuting.' },
+  { id: 'p4', name: 'VoltDock Mini', category: 'Chargers', price: 5999, stock: 18, image: '🔌', description: 'Compact charger with fast USB-C output.' },
+];
+
+const demoPackages = [
+  { id: 'pkg1', title: 'Signature Wedding', category: 'Wedding', price: 135000, description: 'Event planning, decor styling, and guest coordination.' },
+  { id: 'pkg2', title: 'Luxury Reception', category: 'Reception', price: 245000, description: 'Premium venue styling and coordination package.' },
+  { id: 'pkg3', title: 'Premium Mehndi', category: 'Ceremony', price: 60000, description: 'Traditional setup with styling and event coverage.' },
+];
+
+const demoHalls = [
+  { id: 'hall1', name: 'Pearl Grand Hall', city: 'Lahore', capacity: 700, price_from: 180000 },
+  { id: 'hall2', name: 'Rosewood Gardens', city: 'Karachi', capacity: 520, price_from: 160000 },
+  { id: 'hall3', name: 'Crescent Ballroom', city: 'Islamabad', capacity: 400, price_from: 120000 },
+];
+
+const demoServices = [
+  { id: 'svc1', name: 'Catering', price_from: 60000, description: 'Multi-course menus and chef-managed catering.' },
+  { id: 'svc2', name: 'Photography', price_from: 75000, description: 'Professional photography and cinematic coverage.' },
+  { id: 'svc3', name: 'Makeup & Styling', price_from: 40000, description: 'Beauty and styling team for weddings and events.' },
+];
+
+const demoOrders = [
+  { id: 'ord1', created_at: '2026-09-10', total: 24999, status: 'Delivered', payment_status: 'Paid', items: 'Auralite Pro X × 1' },
+  { id: 'ord2', created_at: '2026-09-15', total: 16499, status: 'In Transit', payment_status: 'Paid', items: 'EchoBuds Air × 1' },
+];
+
+const demoBookings = [
+  { id: 'bk1', created_at: '2026-09-11', package_title: 'Signature Wedding', hall_name: 'Pearl Grand Hall', status: 'Confirmed', total: 135000 },
+  { id: 'bk2', created_at: '2026-09-18', package_title: 'Luxury Reception', hall_name: 'Rosewood Gardens', status: 'Pending', total: 245000 },
+];
+
+const demoPayments = [
+  { id: 'pay1', method: 'JazzCash', amount: 24999, status: 'Paid' },
+  { id: 'pay2', method: 'Card payment', amount: 135000, status: 'Pending' },
+];
+
+const demoProfile = { full_name: 'Zeeshan Ali', phone: '+92 300 1234567', email: 'guest@zia.example' };
+
+function getStoredCart() {
+  try {
+    const raw = localStorage.getItem('zia-cart');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export default function App() {
+  const [tab, setTab] = useState('Home');
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [cart, setCart] = useState(() => getStoredCart());
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(demoProfile);
+  const [products, setProducts] = useState(demoProducts);
+  const [packages, setPackages] = useState(demoPackages);
+  const [halls, setHalls] = useState(demoHalls);
+  const [services, setServices] = useState(demoServices);
+  const [orders, setOrders] = useState(demoOrders);
+  const [bookings, setBookings] = useState(demoBookings);
+  const [payments, setPayments] = useState(demoPayments);
+  const [authMode, setAuthMode] = useState('login');
+  const [form, setForm] = useState({ full_name: '', phone: '', email: '', password: '', address: '' });
+  const [notice, setNotice] = useState('');
+  const [selectedMethod, setSelectedMethod] = useState('Card payment');
+
+  useEffect(() => {
+    localStorage.setItem('zia-cart', JSON.stringify(cart));
+  }, [cart]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const loadSession = async () => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      setSession(currentSession);
+      if (currentSession?.user?.email) {
+        setProfile((prev) => ({ ...prev, email: currentSession.user.email }));
+      }
+    };
+    loadSession();
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      setSession(currentSession);
+    });
+    return () => authListener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const loadData = async () => {
+      const [{ data: liveProducts }, { data: livePackages }, { data: liveHalls }, { data: liveServices }] = await Promise.all([
+        supabase.from('electronics_products').select('*').eq('is_active', true).limit(20),
+        supabase.from('wedding_packages').select('*').eq('is_active', true).limit(20),
+        supabase.from('wedding_halls').select('*').eq('is_active', true).limit(20),
+        supabase.from('event_services').select('*').eq('is_active', true).limit(20),
+      ]);
+      if (liveProducts) setProducts(liveProducts);
+      if (livePackages) setPackages(livePackages);
+      if (liveHalls) setHalls(liveHalls);
+      if (liveServices) setServices(liveServices);
+    };
+    loadData().catch(() => {});
+  }, []);
+
+  const filteredProducts = useMemo(() => {
+    if (activeCategory === 'All') return products;
+    return products.filter((product) => product.category === activeCategory);
+  }, [activeCategory, products]);
+
+  const subtotal = useMemo(
+    () => cart.reduce((sum, item) => sum + Number(item.price) * Number(item.qty || 1), 0),
+    [cart]
+  );
+
+  const addToCart = (item, quantity = 1) => {
+    setCart((current) => {
+      const existing = current.find((entry) => entry.id === item.id);
+      if (existing) {
+        return current.map((entry) =>
+          entry.id === item.id ? { ...entry, qty: Number(entry.qty || 1) + quantity } : entry
+        );
+      }
+      return [...current, { ...item, qty: quantity }];
+    });
+    setTab('Cart');
+    setNotice(`${item.name} added to cart.`);
+  };
+
+  const updateCartQty = (id, delta) => {
+    setCart((current) =>
+      current
+        .map((item) =>
+          item.id === id ? { ...item, qty: Math.max(0, Number(item.qty || 1) + delta) } : item
+        )
+        .filter((item) => item.qty > 0)
+    );
+  };
+
+  const signUpOrIn = async (event) => {
+    event.preventDefault();
+
+    if (!supabase) {
+      setSession({ user: { email: form.email || 'demo@zia.local' } });
+      setProfile({ ...demoProfile, ...{ full_name: form.full_name || demoProfile.full_name, phone: form.phone || demoProfile.phone, email: form.email || demoProfile.email } });
+      setNotice(authMode === 'signup' ? 'Demo account created successfully.' : 'Demo login successful.');
+      return;
+    }
+
+    try {
+      if (authMode === 'signup') {
+        const { error } = await supabase.auth.signUp({
+          email: form.email,
+          password: form.password,
+          options: { data: { full_name: form.full_name, phone: form.phone } },
+        });
+        if (error) throw error;
+        setNotice('Account created. Check your email to finish signup.');
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: form.email,
+          password: form.password,
+        });
+        if (error) throw error;
+        setSession(data.session);
+        setNotice('Login successful.');
+      }
+    } catch (error) {
+      setNotice(error.message || 'Authentication failed.');
+    }
+  };
+
+  const signOut = async () => {
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    setSession(null);
+    setProfile(demoProfile);
+    setNotice('Signed out successfully.');
+  };
+
+  const checkout = async () => {
+    if (!cart.length) {
+      setNotice('Your cart is empty. Add something before checking out.');
+      return;
+    }
+
+    const orderData = {
+      id: `ORD-${Date.now()}`,
+      created_at: new Date().toISOString().slice(0, 10),
+      total: subtotal,
+      status: 'Confirmed',
+      payment_status: 'Paid',
+      items: cart.map((item) => `${item.name} × ${item.qty}`).join(', '),
+    };
+
+    if (supabase && session) {
+      try {
+        const payload = cart.map((item) => ({
+          product_id: item.id,
+          quantity: item.qty,
+          unit_price: Number(item.price || 0),
+        }));
+
+        const { data, error } = await supabase.rpc('checkout_cart', {
+          p_items: payload,
+          p_payment_method_id: null,
+          p_delivery_address: form.address || 'Customer address',
+        });
+
+        if (error) throw error;
+        setNotice(`Order placed successfully. Reference: ${data || orderData.id}`);
+      } catch (error) {
+        setNotice(error.message || 'Checkout could not be completed.');
+      }
+    } else {
+      setOrders((current) => [orderData, ...current]);
+      setPayments((current) => [
+        { id: `PAY-${Date.now()}`, method: selectedMethod, amount: subtotal, status: 'Paid' },
+        ...current,
+      ]);
+      setCart([]);
+      setNotice('Demo checkout completed successfully.');
+    }
+  };
+
+  const protectedContent = (
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand-wrap">
+          <div className="brand-mark">Z</div>
+          <div>
+            <p className="eyebrow">Event and Wedding Planner</p>
+            <h1>ZIA Customer App</h1>
+          </div>
+        </div>
+        <nav className="nav">
+          {nav.map((item) => (
+            <button
+              key={item}
+              className={tab === item ? 'nav-btn active' : 'nav-btn'}
+              onClick={() => setTab(item)}
+            >
+              {item}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      <main className="content">
+        {tab === 'Home' && (
+          <section className="hero panel">
+            <div>
+              <span className="pill">Smart Gadget Store</span>
+              <h2>Celebrate beautifully, shop smarter.</h2>
+              <p>
+                From wedding planning and premium event packages to everyday tech essentials, ZIA brings together celebration and convenience in one place.
+              </p>
+              <div className="cta-row">
+                <button onClick={() => setTab('Wedding & Events')}>Explore weddings</button>
+                <button className="secondary" onClick={() => setTab('Smart Gadget Store')}>Browse gadgets</button>
+              </div>
+            </div>
+            <div className="hero-card">
+              <div className="mini-stat">
+                <strong>4.9/5</strong>
+                <span>Customer satisfaction</span>
+              </div>
+              <div className="mini-stat">
+                <strong>2.4k+</strong>
+                <span>Happy events planned</span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {tab === 'Wedding & Events' && (
+          <section className="stack">
+            <div className="panel">
+              <h3>Wedding packages</h3>
+              <div className="card-grid">
+                {packages.map((item) => (
+                  <div key={item.id} className="card">
+                    <span className="badge">{item.category}</span>
+                    <h4>{item.title}</h4>
+                    <p>{item.description}</p>
+                    <div className="card-row">
+                      <strong>{money(item.price)}</strong>
+                      <button onClick={() => setTab('Bookings')}>Book now</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="panel">
+              <h3>Wedding halls</h3>
+              <div className="list-grid">
+                {halls.map((hall) => (
+                  <div key={hall.id} className="list-item">
+                    <div>
+                      <h4>{hall.name}</h4>
+                      <small>{hall.city}</small>
+                    </div>
+                    <div>
+                      <strong>{hall.capacity} guests</strong>
+                      <span>{money(hall.price_from)}+</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="panel">
+              <h3>Event services</h3>
+              <div className="list-grid">
+                {services.map((service) => (
+                  <div key={service.id} className="list-item">
+                    <div>
+                      <h4>{service.name}</h4>
+                      <small>{service.description}</small>
+                    </div>
+                    <strong>{money(service.price_from)}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {tab === 'Smart Gadget Store' && (
+          <section className="panel">
+            <div className="toolbar">
+              <div className="category-pills">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    className={activeCategory === category ? 'chip active' : 'chip'}
+                    onClick={() => setActiveCategory(category)}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="card-grid product-grid">
+              {filteredProducts.map((product) => (
+                <div key={product.id} className="card product-card">
+                  <div className="product-icon">{product.image}</div>
+                  <span className="badge">{product.category}</span>
+                  <h4>{product.name}</h4>
+                  <p>{product.description}</p>
+                  <div className="card-row">
+                    <strong>{money(product.price)}</strong>
+                    <button onClick={() => addToCart(product)}>Add to cart</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {tab === 'Bookings' && (
+          <section className="panel">
+            <h3>Bookings</h3>
+            <div className="list-grid">
+              {bookings.map((booking) => (
+                <div key={booking.id} className="list-item">
+                  <div>
+                    <h4>{booking.package_title}</h4>
+                    <small>{booking.hall_name}</small>
+                  </div>
+                  <div>
+                    <strong>{booking.status}</strong>
+                    <span>{money(booking.total)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {tab === 'Orders' && (
+          <section className="panel">
+            <h3>Orders</h3>
+            <div className="list-grid">
+              {orders.map((order) => (
+                <div key={order.id} className="list-item">
+                  <div>
+                    <h4>{order.id}</h4>
+                    <small>{order.items}</small>
+                  </div>
+                  <div>
+                    <strong>{order.status}</strong>
+                    <span>{money(order.total)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {tab === 'Cart' && (
+          <section className="panel cart-panel">
+            <h3>Shopping Cart</h3>
+            {cart.length === 0 ? (
+              <p>Your cart is empty.</p>
+            ) : (
+              <>
+                <div className="cart-list">
+                  {cart.map((item) => (
+                    <div key={item.id} className="cart-item">
+                      <div>
+                        <h4>{item.name}</h4>
+                        <small>{money(item.price)} each</small>
+                      </div>
+                      <div className="qty-controls">
+                        <button onClick={() => updateCartQty(item.id, -1)}>-</button>
+                        <span>{item.qty}</span>
+                        <button onClick={() => updateCartQty(item.id, 1)}>+</button>
+                      </div>
+                      <strong>{money((Number(item.price) || 0) * Number(item.qty || 1))}</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="checkout-box">
+                  <div className="field-group">
+                    <label>Delivery address</label>
+                    <input
+                      value={form.address}
+                      onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))}
+                      placeholder="Your address"
+                    />
+                  </div>
+                  <div className="field-group">
+                    <label>Payment method</label>
+                    <select value={selectedMethod} onChange={(event) => setSelectedMethod(event.target.value)}>
+                      {['Cash on Delivery', 'Card payment', 'JazzCash'].map((method) => (
+                        <option key={method} value={method}>{method}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="totals">
+                    <span>Subtotal</span>
+                    <strong>{money(subtotal)}</strong>
+                  </div>
+                  <button className="checkout-btn" onClick={checkout}>Complete checkout</button>
+                </div>
+              </>
+            )}
+          </section>
+        )}
+
+        {tab === 'Account' && (
+          <section className="panel account-panel">
+            <h3>Account</h3>
+            {!session ? (
+              <div className="auth-box">
+                <div className="tab-toggle">
+                  <button className={authMode === 'login' ? 'active' : ''} onClick={() => setAuthMode('login')}>Login</button>
+                  <button className={authMode === 'signup' ? 'active' : ''} onClick={() => setAuthMode('signup')}>Sign up</button>
+                </div>
+                <form onSubmit={signUpOrIn} className="auth-form">
+                  {authMode === 'signup' && (
+                    <div className="field-group">
+                      <label>Full name</label>
+                      <input value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} />
+                    </div>
+                  )}
+                  <div className="field-group">
+                    <label>Email</label>
+                    <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+                  </div>
+                  {authMode === 'signup' && (
+                    <div className="field-group">
+                      <label>Phone</label>
+                      <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+                    </div>
+                  )}
+                  <div className="field-group">
+                    <label>Password</label>
+                    <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+                  </div>
+                  <button type="submit">{authMode === 'login' ? 'Login' : 'Create account'}</button>
+                </form>
+              </div>
+            ) : (
+              <div className="account-details">
+                <div className="profile-card">
+                  <h4>{profile.full_name}</h4>
+                  <p>{profile.email}</p>
+                  <p>{profile.phone}</p>
+                </div>
+                <div className="account-stats">
+                  <div>
+                    <strong>{orders.length}</strong>
+                    <span>Orders</span>
+                  </div>
+                  <div>
+                    <strong>{bookings.length}</strong>
+                    <span>Bookings</span>
+                  </div>
+                  <div>
+                    <strong>{payments.length}</strong>
+                    <span>Payments</span>
+                  </div>
+                </div>
+                <button className="secondary" onClick={signOut}>Sign out</button>
+              </div>
+            )}
+          </section>
+        )}
+      </main>
+
+      {notice && <div className="toast">{notice}</div>}
+    </div>
+  );
+
+  return protectedContent;
+}
