@@ -1,37 +1,42 @@
-# ZIA Business Platform
+# ZIA Event and Wedding Planner
 
-Exactly two applications live in this repository:
+This repository contains exactly two applications:
 
-- `apps/customer` — public, mobile-first ZIA Customer App.
-- `apps/admin` — authenticated, private ZIA Admin Panel.
+1. `apps/customer` — the public, mobile-first **ZIA Event and Wedding Planner** customer app.
+2. `apps/admin` — the separate, authenticated **ZIA Private Admin Panel**.
 
-There is intentionally no rider, staff, delivery, calendar, wishlist, review/rating, or third application.
+The store section inside the customer app is named **Smart Gadget Store**. The customer app contains no admin route, admin button, or admin control. This repository intentionally contains no rider, staff, delivery, calendar, wishlist, review, rating, or third application.
 
-## Install and run
+## Setup
 
 ```bash
 npm install
-npm run dev:customer # http://localhost:5173
-npm run dev:admin    # http://localhost:5174
-npm run build:customer
-npm run build:admin
 ```
 
-Create `.env.local` in **each** app (never commit it):
+Create `.env.local` in both `apps/customer` and `apps/admin` using the same Supabase project:
 
 ```bash
 VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 VITE_SUPABASE_ANON_KEY=your_publishable_anon_key
 ```
 
-Run `supabase/schema.sql` in the Supabase SQL editor. Create users in Supabase Authentication. To authorize a private admin, insert that Auth user UUID into `admin_users`; no service-role key belongs in either frontend. Customer checkout and bookings require a signed-in customer so RLS can associate records with `auth.uid()`.
+Run `supabase/schema.sql` in the Supabase SQL Editor. Create users with Supabase Auth. Add an authorized admin user UUID to `admin_users`; the admin frontend uses only the publishable anon key and never contains a service-role secret.
+
+## Development and production builds
+
+```bash
+npm run dev:customer
+npm run dev:admin
+npm run build:customer
+npm run build:admin
+```
+
+Customer runs on port 5173 and the private admin panel on port 5174.
 
 ## Shared data and security
 
-Both apps use the same Supabase project and subscribe to catalog/order/booking changes with Realtime, so admin price, stock, package, payment-method and status changes appear without rebuilding. Row Level Security exposes only active public records, a customer’s own records, and admin-managed data to active admins. The admin app has no bypass key: authorization is enforced by Supabase Auth and `is_admin()`.
+Both apps use the same Supabase database. Products, categories, prices, stock, payment methods, wedding packages, halls, services, orders, bookings, and payment/advance statuses are stored centrally. The customer app reads active records and subscribes to relevant Realtime changes, so catalog and package updates appear without rebuilding. The admin panel requires Supabase Auth and an active `admin_users` record. RLS policies in `supabase/schema.sql` protect customer-owned records and require `is_admin()` for operational mutations.
 
-## Included production flows
+Customer features include PKR pricing, Smart Watches, Earbuds, Handsfree and Chargers, product detail/cart/checkout, Cash on Delivery, card, JazzCash, EasyPaisa and bank transfer options, wedding/event package and hall booking, 20% advance and remaining balance display, account, order history, booking history, loading/error/empty/success states and form validation.
 
-Customer: live catalog, Smart Watches/Earbuds/Handsfree/Chargers, details, cart, validated checkout, PKR totals, Cash/Card/JazzCash/EasyPaisa/Bank Transfer options, wedding packages, hall/service booking, 20% advance and remaining balance, account, order and booking history, and loading/error/empty/success states.
-
-Admin: private login, dashboard metrics, live catalog editing, product/category/package/hall/service/payment management, stock and prices, order and booking status updates, payment/advance tracking, customer records and audit log support.
+Admin features include private login, dashboard analytics, product/category/package/hall/service/payment management, price and stock controls, order and booking status updates, payment and advance tracking, customer records and audit-log schema support.
