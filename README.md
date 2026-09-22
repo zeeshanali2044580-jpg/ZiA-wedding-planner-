@@ -1,6 +1,6 @@
 # ZIA Event and Wedding Planner
 
-Exactly two applications remain: `apps/customer` and `apps/admin`. The customer store is **Smart Gadget Store**. No third app, rider/staff/delivery system, calendar, wishlist, reviews, ratings, or customer-facing admin route exists.
+Exactly two applications exist: `apps/customer` and `apps/admin`. The customer store is **Smart Gadget Store**. No third application or prohibited feature has been added.
 
 ## Setup
 
@@ -8,16 +8,16 @@ Exactly two applications remain: `apps/customer` and `apps/admin`. The customer 
 npm install
 ```
 
-Set the same Supabase project in `.env.local` under each app:
+Set the same Supabase project in both apps' `.env.local` files:
 
 ```bash
 VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 VITE_SUPABASE_ANON_KEY=your_publishable_anon_key
 ```
 
-Run the existing `supabase/schema.sql`, then `supabase/production.sql`. Create Auth users and add the admin Auth user's UUID to `admin_users`. Never expose a service-role key in frontend code.
+Run `supabase/schema.sql` followed by `supabase/production.sql` in the Supabase SQL editor. Create Auth users and add the admin Auth user's UUID to `admin_users`. Never use a service-role key in frontend code.
 
-## Run/build
+## Commands
 
 ```bash
 npm run dev:customer
@@ -26,4 +26,4 @@ npm run build:customer
 npm run build:admin
 ```
 
-The customer app automatically upserts its auth-linked profile, reads live catalog/package/payment data, persists bookings and uses the atomic `checkout_cart` RPC so prices and stock are trusted by the database. The private admin app requires Auth plus an active `admin_users` row, manages live products, prices, stock, categories, packages, halls, orders and bookings, and records audit entries. RLS and security-definer functions enforce customer ownership and admin-only mutations.
+Customer authentication includes registration and retry-safe profile upsert. Checkout calls the database `checkout_cart` RPC, which locks products, validates stock, uses trusted prices, creates order items, and decrements stock atomically. Booking advance submissions create pending payment records. The admin panel is Auth/RLS protected and provides CRUD for categories, packages, halls, services and payment methods, plus product inventory, order/booking status, payment verification, customer records and audit logging.
