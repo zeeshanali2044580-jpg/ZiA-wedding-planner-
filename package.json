@@ -1,0 +1,13 @@
+{
+  "name": "zia-business-platform",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:customer": "npm --workspace apps/customer run dev",
+    "dev:admin": "npm --workspace apps/admin run dev",
+    "build:customer": "npm --workspace apps/customer run build",
+    "build:admin": "npm --workspace apps/admin run build"
+  }
+}
