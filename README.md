@@ -32,6 +32,6 @@ npm run build:customer
 npm run build:admin
 ```
 
-The customer app includes retry-safe customer profiles, live products/packages/halls/payment methods, persistent order and booking history, Pakistani payment methods, and atomic database-priced checkout via `checkout_cart`. The admin panel uses Supabase Auth plus `is_admin()`/RLS, live metrics, product inventory, CRUD for categories/packages/halls/services/payment methods, order/booking statuses, payment verification, customer records and audit logging.
+The customer app includes retry-safe profiles, live catalog and packages, registration, persistent order/booking history, Pakistani payment methods, and atomic database-priced checkout through `checkout_cart`. The private admin panel includes Auth/RLS authorization, live metrics, product price/stock management, CRUD for categories/packages/halls/services/payment methods, order and booking statuses, payment verification, customers, and audit logging.
 
-The GitHub API environment can inspect and commit repository files but cannot execute Node.js, Supabase, browser, lint, or build commands. Build/runtime verification is therefore explicitly not claimed here.
+Static repository changes can be reviewed through GitHub. Node, browser, Supabase, lint, and build execution are not available through the GitHub API tools, so this change does not claim runtime verification.
