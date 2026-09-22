@@ -1,6 +1,6 @@
 # ZIA Event and Wedding Planner
 
-Exactly two apps are included: `apps/customer` (public customer app) and `apps/admin` (private admin panel). The customer store is named **Smart Gadget Store**. No admin route or control exists in the customer app, and there is no rider, staff, delivery, calendar, wishlist, review, rating, or third app.
+Exactly two applications remain: `apps/customer` and `apps/admin`. The customer store is **Smart Gadget Store**. No third app, rider/staff/delivery system, calendar, wishlist, reviews, ratings, or customer-facing admin route exists.
 
 ## Setup
 
@@ -8,16 +8,16 @@ Exactly two apps are included: `apps/customer` (public customer app) and `apps/a
 npm install
 ```
 
-Create `.env.local` in both app directories using the same Supabase project:
+Set the same Supabase project in `.env.local` under each app:
 
 ```bash
 VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 VITE_SUPABASE_ANON_KEY=your_publishable_anon_key
 ```
 
-Run `supabase/schema.sql` in the Supabase SQL Editor. Create users with Supabase Auth; add an authorized admin user's UUID to `admin_users`. Never put a service-role key in frontend code.
+Run the existing `supabase/schema.sql`, then `supabase/production.sql`. Create Auth users and add the admin Auth user's UUID to `admin_users`. Never expose a service-role key in frontend code.
 
-## Run and build
+## Run/build
 
 ```bash
 npm run dev:customer
@@ -26,4 +26,4 @@ npm run build:customer
 npm run build:admin
 ```
 
-The customer app uses live products/categories/packages/halls/payment methods, authenticated order and booking persistence, PKR totals, and Pakistani payment methods (Cash on Delivery, card, JazzCash, EasyPaisa and bank transfer). The admin panel uses Supabase Auth, admin authorization, shared product/stock/price and order/booking status controls, customer records and audit logging. RLS ensures customers access only their own records and only authorized admins can mutate operational data.
+The customer app automatically upserts its auth-linked profile, reads live catalog/package/payment data, persists bookings and uses the atomic `checkout_cart` RPC so prices and stock are trusted by the database. The private admin app requires Auth plus an active `admin_users` row, manages live products, prices, stock, categories, packages, halls, orders and bookings, and records audit entries. RLS and security-definer functions enforce customer ownership and admin-only mutations.
