@@ -1,356 +1,44 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { money, supabase } from './lib/supabase';
 
-const navItems = ['Home', 'Wedding & Events', 'ZIA Electronics', 'Bookings', 'Orders', 'Cart', 'Account'];
-const featureActions = ['Search', 'Notifications', 'Offers', 'Support'];
-
-const weddingPackages = [
-  { title: 'Royal Garden Wedding', price: '₨ 245,000', tag: 'Signature' },
-  { title: 'Modern Luxury Event', price: '₨ 180,000', tag: 'Popular' },
-  { title: 'Destination Celebration', price: '₨ 320,000', tag: 'Elite' },
-  { title: 'Intimate Family Event', price: '₨ 120,000', tag: 'New' }
+const seedProducts = [
+  { id:'p1', name:'ZIA Pulse Pro', category:'Smart Watches', price:28500, stock_quantity:54, description:'AMOLED fitness smartwatch with heart-rate tracking, calling and seven-day battery.', accent:'gold' },
+  { id:'p2', name:'ZIA Nova Buds', category:'Earbuds', price:16900, stock_quantity:128, description:'Noise-cancelling wireless earbuds with a pocket charging case.', accent:'purple' },
+  { id:'p3', name:'ZIA Air Handsfree', category:'Handsfree', price:6900, stock_quantity:87, description:'Clear-call Bluetooth handsfree with comfortable all-day fit.', accent:'blue' },
+  { id:'p4', name:'ZIA Charge Dock', category:'Chargers', price:4200, stock_quantity:42, description:'Fast USB-C charger and compact travel dock for your everyday devices.', accent:'pink' }
 ];
-
-const electronicsCategories = [
-  'Smart Watches',
-  'Earbuds',
-  'Accessories',
-  'Future Products'
+const seedPackages = [
+  { id:'w1', title:'Royal Garden Wedding', category:'Wedding', price:245000, description:'Complete premium garden celebration with decor, coordination and catering.' },
+  { id:'w2', title:'Modern Luxury Event', category:'Corporate & Social', price:180000, description:'Contemporary styling, lighting and event management for a polished occasion.' },
+  { id:'w3', title:'Intimate Family Event', category:'Private Event', price:120000, description:'Warm, elegant planning for beautiful family gatherings.' }
 ];
-
-const electronicsProducts = [
-  { name: 'ZIA Pulse Pro', category: 'Smart Watches', price: '₨ 28,500', accent: 'gold' },
-  { name: 'ZIA Nova Buds', category: 'Earbuds', price: '₨ 16,900', accent: 'purple' },
-  { name: 'ZIA Charge Dock', category: 'Accessories', price: '₨ 4,200', accent: 'blue' },
-  { name: 'ZIA Vision Lens', category: 'Future Products', price: '₨ 42,000', accent: 'pink' }
-];
-
-const bookingStatus = [
-  { label: 'Confirmed', value: '04' },
-  { label: 'Pending', value: '02' },
-  { label: 'Completed', value: '12' }
-];
-
-const recentOrders = [
-  { item: 'ZIA Pulse Pro', status: 'Out for delivery', amount: '₨ 28,500' },
-  { item: 'Wedding package', status: 'Confirmed', amount: '₨ 245,000' },
-  { item: 'Travel accessories', status: 'Packed', amount: '₨ 9,400' }
-];
+const categories = ['All','Smart Watches','Earbuds','Handsfree','Chargers'];
+const nav = ['Home','Wedding & Events','ZIA Electronics','Bookings','Orders','Cart','Account'];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('Home');
-  const [cartCount, setCartCount] = useState(2);
-
-  const activePanel = useMemo(() => {
-    switch (activeTab) {
-      case 'Wedding & Events':
-        return <WeddingEventsPanel />;
-      case 'ZIA Electronics':
-        return <ElectronicsPanel />;
-      case 'Bookings':
-        return <BookingsPanel />;
-      case 'Orders':
-        return <OrdersPanel />;
-      case 'Cart':
-        return <CartPanel cartCount={cartCount} setCartCount={setCartCount} />;
-      case 'Account':
-        return <AccountPanel />;
-      default:
-        return <HomePanel setActiveTab={setActiveTab} setCartCount={setCartCount} />;
-    }
-  }, [activeTab, cartCount]);
-
-  return (
-    <div className="app-shell customer-shell">
-      <header className="topbar">
-        <div className="brand-group">
-          <div className="brand-mark">Z</div>
-          <div>
-            <p className="eyebrow">Wedding & Event Planner</p>
-            <h1>ZIA</h1>
-          </div>
-        </div>
-
-        <div className="action-row">
-          <button className="pill-button">Search</button>
-          <button className="icon-button">🔔</button>
-          <button className="icon-button">🎁</button>
-          <button className="icon-button">💬</button>
-        </div>
-      </header>
-
-      <div className="search-bar-wrap">
-        <div className="search-bar">
-          <span>⌕</span>
-          <input type="text" placeholder="Search weddings, tech, offers..." />
-        </div>
-      </div>
-
-      <nav className="nav-bar">
-        {navItems.map((item) => (
-          <button
-            key={item}
-            className={activeTab === item ? 'nav-item active' : 'nav-item'}
-            onClick={() => setActiveTab(item)}
-          >
-            {item}
-          </button>
-        ))}
-      </nav>
-
-      <main className="content-area">{activePanel}</main>
-
-      <footer className="bottom-actions">
-        {featureActions.map((action) => (
-          <button key={action} className="feature-button">
-            {action}
-          </button>
-        ))}
-      </footer>
-    </div>
-  );
+  const [tab,setTab] = useState('Home'); const [products,setProducts] = useState(seedProducts); const [packages,setPackages] = useState(seedPackages);
+  const [cart,setCart] = useState([]); const [orders,setOrders] = useState([]); const [bookings,setBookings] = useState([]); const [query,setQuery] = useState(''); const [toast,setToast] = useState('');
+  const [selected,setSelected] = useState(null); const [auth,setAuth] = useState(false);
+  useEffect(() => { if (!supabase) return; Promise.all([supabase.from('electronics_products').select('*, electronics_categories(name)').eq('is_active',true),supabase.from('wedding_packages').select('*').eq('is_active',true)]).then(([p,w]) => { if(p.data?.length) setProducts(p.data.map(x=>({...x,category:x.electronics_categories?.name || x.category}))); if(w.data?.length) setPackages(w.data); }); }, []);
+  const add = (item) => { setCart(c => { const found=c.find(x=>x.id===item.id); return found ? c.map(x=>x.id===item.id?{...x,quantity:x.quantity+1}:x) : [...c,{...item,quantity:1}]; }); notice('Added to cart'); };
+  const notice = (text) => { setToast(text); setTimeout(()=>setToast(''),2200); };
+  const shown = products.filter(p => `${p.name} ${p.category}`.toLowerCase().includes(query.toLowerCase()));
+  const total = cart.reduce((sum,x)=>sum+x.price*x.quantity,0);
+  const content = tab==='Home' ? <Home go={setTab} add={add} products={products} packages={packages}/> : tab==='ZIA Electronics' ? <Shop products={shown} add={add} open={setSelected}/> : tab==='Wedding & Events' ? <Events packages={packages} book={(p)=>setSelected({type:'booking',item:p})}/> : tab==='Cart' ? <Cart cart={cart} setCart={setCart} total={total} checkout={()=>setSelected({type:'checkout'})}/> : tab==='Bookings' ? <Bookings bookings={bookings} book={setSelected}/> : tab==='Orders' ? <Orders orders={orders}/> : <Account auth={auth} setAuth={setAuth}/>;
+  if (selected && selected.type!=='booking' && selected.type!=='checkout') return <Shell tab={tab} setTab={setTab} query={query} setQuery={setQuery} cart={cart}><Product item={selected} close={()=>setSelected(null)} add={add}/></Shell>;
+  return <Shell tab={tab} setTab={setTab} query={query} setQuery={setQuery} cart={cart}><main>{content}</main>{selected?.type==='checkout' && <Checkout cart={cart} total={total} close={()=>setSelected(null)} done={(order)=>{setOrders(o=>[order,...o]);setCart([]);setSelected(null);setTab('Orders');notice('Order placed successfully')}}/>}{selected?.type==='booking' && <BookingForm item={selected.item} close={()=>setSelected(null)} done={(b)=>{setBookings(x=>[b,...x]);setSelected(null);setTab('Bookings');notice('Booking request submitted')}}/>}</Shell>;
 }
-
-function HomePanel({ setActiveTab, setCartCount }) {
-  return (
-    <>
-      <section className="hero-card">
-        <div>
-          <p className="eyebrow hero-eyebrow">Premium experiences</p>
-          <h2>Celebrate beautifully. Shop smarter.</h2>
-          <p>From grand wedding storytelling to smart tech upgrades, ZIA brings together luxury, convenience, and effortless planning.</p>
-          <div className="hero-actions">
-            <button onClick={() => setActiveTab('Wedding & Events')}>Plan an Event</button>
-            <button className="secondary" onClick={() => setActiveTab('ZIA Electronics')}>Explore Tech</button>
-          </div>
-        </div>
-      </section>
-
-      <section className="mini-grid">
-        <div className="mini-card accent-pink">
-          <span>Wedding packages</span>
-          <strong>12 curated themes</strong>
-        </div>
-        <div className="mini-card accent-gold">
-          <span>Electronics</span>
-          <strong>Fresh arrivals</strong>
-        </div>
-        <div className="mini-card accent-blue">
-          <span>Events</span>
-          <strong>Book fast</strong>
-        </div>
-      </section>
-
-      <section className="section-header">
-        <h3>Featured experiences</h3>
-        <button onClick={() => setActiveTab('Wedding & Events')}>View all</button>
-      </section>
-
-      <div className="card-grid">
-        {weddingPackages.map((pkg) => (
-          <div key={pkg.title} className="listing-card">
-            <div className="card-image image-wedding" />
-            <div className="card-body">
-              <span className="tag">{pkg.tag}</span>
-              <h4>{pkg.title}</h4>
-              <div className="row-between">
-                <strong>{pkg.price}</strong>
-                <button onClick={() => setCartCount((v) => v + 1)}>Book</button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <section className="section-header">
-        <h3>ZIA Electronics picks</h3>
-        <button onClick={() => setActiveTab('ZIA Electronics')}>Shop now</button>
-      </section>
-
-      <div className="card-grid">
-        {electronicsProducts.map((item) => (
-          <div key={item.name} className="listing-card tech-card">
-            <div className={`card-image image-tech ${item.accent}`} />
-            <div className="card-body">
-              <span className="tag muted">{item.category}</span>
-              <h4>{item.name}</h4>
-              <div className="row-between">
-                <strong>{item.price}</strong>
-                <button onClick={() => setCartCount((v) => v + 1)}>Add</button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
-
-function WeddingEventsPanel() {
-  return (
-    <div className="stacked-panel">
-      <section className="panel-block">
-        <div className="section-header compact">
-          <h3>Wedding & Events</h3>
-          <button>Custom quote</button>
-        </div>
-        <div className="list-tiles">
-          {['Bridal Styling', 'Venue Design', 'Photography', 'Luxury Decor', 'Catering', 'Entertainment'].map((service) => (
-            <div key={service} className="tile-card">
-              <span>{service}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel-block">
-        <h3>Popular packages</h3>
-        {weddingPackages.map((pkg) => (
-          <div key={pkg.title} className="detail-row">
-            <div>
-              <strong>{pkg.title}</strong>
-              <p>{pkg.tag}</p>
-            </div>
-            <span>{pkg.price}</span>
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function ElectronicsPanel() {
-  return (
-    <div className="stacked-panel">
-      <section className="panel-block">
-        <div className="section-header compact">
-          <h3>ZIA Electronics</h3>
-          <button>Filters</button>
-        </div>
-        <div className="chips-row">
-          {electronicsCategories.map((cat) => (
-            <span key={cat} className="chip">{cat}</span>
-          ))}
-        </div>
-      </section>
-
-      <section className="product-list">
-        {electronicsProducts.map((item) => (
-          <div key={item.name} className="product-row">
-            <div className={`product-thumb ${item.accent}`} />
-            <div className="product-info">
-              <strong>{item.name}</strong>
-              <span>{item.category}</span>
-            </div>
-            <div className="product-meta">
-              <strong>{item.price}</strong>
-              <button>Add</button>
-            </div>
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function BookingsPanel() {
-  return (
-    <div className="stacked-panel">
-      <section className="panel-block">
-        <h3>Bookings</h3>
-        <div className="status-grid">
-          {bookingStatus.map((item) => (
-            <div key={item.label} className="status-card">
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel-block">
-        <h3>Upcoming schedule</h3>
-        <div className="calendar-card">
-          <div className="mini-date">
-            <span>12</span>
-            <small>SEP</small>
-          </div>
-          <div>
-            <strong>Luxury Garden Wedding</strong>
-            <p>Venue: Lahore • 2:00 PM</p>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function OrdersPanel() {
-  return (
-    <div className="stacked-panel">
-      <section className="panel-block">
-        <h3>Orders</h3>
-        {recentOrders.map((order) => (
-          <div key={order.item} className="detail-row">
-            <div>
-              <strong>{order.item}</strong>
-              <p>{order.status}</p>
-            </div>
-            <span>{order.amount}</span>
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function CartPanel({ cartCount, setCartCount }) {
-  return (
-    <div className="stacked-panel">
-      <section className="panel-block">
-        <h3>Cart</h3>
-        <div className="cart-summary">
-          <div>
-            <span>Items</span>
-            <strong>{cartCount}</strong>
-          </div>
-          <div>
-            <span>Total</span>
-            <strong>₨ 64,900</strong>
-          </div>
-        </div>
-        <button className="primary-full" onClick={() => setCartCount(0)}>Checkout</button>
-      </section>
-    </div>
-  );
-}
-
-function AccountPanel() {
-  return (
-    <div className="stacked-panel">
-      <section className="panel-block profile-box">
-        <div className="avatar">A</div>
-        <div>
-          <h3>Ayesha Khan</h3>
-          <p>Premium member</p>
-        </div>
-      </section>
-
-      <section className="panel-block">
-        <div className="detail-row">
-          <div>
-            <strong>Saved addresses</strong>
-            <p>3 locations</p>
-          </div>
-          <span>Manage</span>
-        </div>
-        <div className="detail-row">
-          <div>
-            <strong>Payment methods</strong>
-            <p>Visa • Mastercard</p>
-          </div>
-          <span>Update</span>
-        </div>
-      </section>
-    </div>
-  );
-}
+function Shell({children,tab,setTab,query,setQuery,cart}) { return <div className="app-shell customer-shell"><header className="topbar"><div className="brand-group"><div className="brand-mark">Z</div><div><p className="eyebrow">Wedding & Event Planner</p><h1>ZIA</h1></div></div><div className="action-row"><button className="icon-button" onClick={()=>alert('You are all caught up')}>🔔</button><button className="icon-button" onClick={()=>alert('New offers are coming soon')}>🎁</button><button className="icon-button" onClick={()=>alert('Support: hello@zia.pk')}>💬</button></div></header><div className="search-bar"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search products and experiences..."/></div><nav className="nav-bar">{nav.map(x=><button key={x} className={tab===x?'nav-item active':'nav-item'} onClick={()=>setTab(x)}>{x}{x==='Cart'&&cart.length?` (${cart.length})`:''}</button>)}</nav>{children}<footer className="bottom-actions"><button className="feature-button" onClick={()=>alert('Special offers are updated weekly')}>Offers</button><button className="feature-button" onClick={()=>alert('Support: hello@zia.pk')}>Support</button><button className="feature-button" onClick={()=>setTab('Bookings')}>My bookings</button><button className="feature-button" onClick={()=>setTab('Orders')}>My orders</button></footer></div> }
+function Home({go,add,products,packages}) { return <><section className="hero-card"><p className="eyebrow">Premium experiences</p><h2>Celebrate beautifully. Shop smarter.</h2><p>Plan meaningful events and discover ZIA electronics in one effortless experience.</p><div className="hero-actions"><button onClick={()=>go('Wedding & Events')}>Plan an event</button><button className="secondary" onClick={()=>go('ZIA Electronics')}>Shop electronics</button></div></section><section className="mini-grid"><div className="mini-card accent-pink"><span>Events</span><strong>Elegant from start to finish</strong></div><div className="mini-card accent-gold"><span>Electronics</span><strong>Tech that fits your life</strong></div><div className="mini-card accent-blue"><span>Payments</span><strong>Cash or digital</strong></div></section><Section title="Featured packages" action="View all" click={()=>go('Wedding & Events')}/><div className="card-grid">{packages.map(p=><Card key={p.id} item={p} action="Book" click={()=>go('Wedding & Events')}/>)}</div><Section title="Latest electronics" action="Shop all" click={()=>go('ZIA Electronics')}/><div className="card-grid">{products.slice(0,4).map(p=><Card key={p.id} item={p} action="Add" click={()=>add(p)}/>)}</div></> }
+function Section({title,action,click}) { return <div className="section-header"><h3>{title}</h3><button onClick={click}>{action}</button></div> }
+function Card({item,action,click}) { return <article className="listing-card"><div className={`card-image image-tech ${item.accent||'pink'}`}/><div className="card-body"><span className="tag muted">{item.category}</span><h4>{item.title||item.name}</h4><p className="description">{item.description}</p><div className="row-between"><strong>{money(item.price)}</strong><button onClick={click}>{action}</button></div></div></article> }
+function Shop({products,add,open}) { const [cat,setCat]=useState('All'); const list=cat==='All'?products:products.filter(p=>p.category===cat); return <><Section title="ZIA Electronics" action="Secure shopping"/><div className="chips-row">{categories.map(c=><button className={cat===c?'chip selected':'chip'} key={c} onClick={()=>setCat(c)}>{c}</button>)}</div><div className="card-grid">{list.map(p=><Card key={p.id} item={p} action="View" click={()=>open(p)}/>)}</div>{!list.length&&<div className="empty panel-block">No products match your search.</div>}</> }
+function Events({packages,book}) { return <><section className="hero-card event-hero"><p className="eyebrow">ZIA Wedding & Event Planner</p><h2>Beautiful venues. Thoughtful details.</h2><p>Choose a package, share your date and let our planners take care of the rest.</p></section><Section title="Packages & event services" action="Request a quote"/><div className="card-grid">{packages.map(p=><Card key={p.id} item={p} action="Book now" click={()=>book(p)}/>)}</div><div className="panel-block service-list"><h3>Available services</h3><p>Wedding halls · Decor · Catering · Photography · Bridal styling · Corporate events</p></div></> }
+function Product({item,close,add}) { return <section className="panel-block detail-page"><button className="back" onClick={close}>← Back to catalog</button><div className={`detail-image image-tech ${item.accent||'pink'}`}/><span className="tag">{item.category}</span><h2>{item.name||item.title}</h2><p>{item.description}</p><strong className="price-large">{money(item.price)}</strong>{item.stock_quantity!==undefined&&<p className={item.stock_quantity?'stock':'stock out'}>{item.stock_quantity?`${item.stock_quantity} available`:'Currently unavailable'}</p>}<button className="primary-full" disabled={!item.stock_quantity} onClick={()=>add(item)}>Add to cart</button></section> }
+function Cart({cart,setCart,total,checkout}) { return <section className="panel-block"><Section title={`Cart (${cart.length})`} action="Continue shopping"/><>{cart.map(x=><div className="detail-row" key={x.id}><div><strong>{x.name}</strong><p>{money(x.price)} × {x.quantity}</p></div><div className="cart-actions"><button onClick={()=>setCart(c=>c.map(y=>y.id===x.id?{...y,quantity:Math.max(0,y.quantity-1)}:y).filter(y=>y.quantity))}>−</button><button onClick={()=>setCart(c=>c.filter(y=>y.id!==x.id))}>Remove</button></div></div>)}</>{cart.length?<><div className="cart-total"><span>Total</span><strong>{money(total)}</strong></div><button className="primary-full" onClick={checkout}>Checkout</button></>:<div className="empty">Your cart is ready for something special.</div>}</section> }
+function Checkout({cart,total,close,done}) { const [method,setMethod]=useState('Cash on Delivery'); const submit=e=>{e.preventDefault();done({id:`ORD-${Date.now()}`,items:cart,total,status:'Pending payment',method,created_at:new Date().toLocaleDateString()})}; return <Modal title="Secure checkout" close={close}><form onSubmit={submit} className="form-grid"><input required placeholder="Full name"/><input required type="tel" placeholder="Pakistani mobile number"/><textarea required placeholder="Delivery address"/><select value={method} onChange={e=>setMethod(e.target.value)}><option>Cash on Delivery</option><option>Card payment</option><option>JazzCash</option><option>EasyPaisa</option><option>Bank transfer</option></select><p className="checkout-total">Payable now: <strong>{money(total)}</strong></p><button className="primary-full">Place order</button></form></Modal> }
+function BookingForm({item,close,done}) { const [method,setMethod]=useState('Cash on Delivery'); const submit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);done({id:`BK-${Date.now()}`,package:item.title,date:f.get('date'),venue:f.get('venue'),guests:f.get('guests'),advance:item.price*.2,status:'Awaiting confirmation',payment:method})}; return <Modal title="Book your event" close={close}><form onSubmit={submit} className="form-grid"><p><strong>{item.title}</strong> · {money(item.price)} total</p><input required name="date" type="date"/><input required name="venue" placeholder="Wedding hall or venue"/><input required name="guests" type="number" min="1" placeholder="Expected guests"/><select value={method} onChange={e=>setMethod(e.target.value)}><option>Cash on Delivery</option><option>Card payment</option><option>JazzCash</option><option>EasyPaisa</option><option>Bank transfer</option></select><p className="checkout-total">Advance (20%): <strong>{money(item.price*.2)}</strong></p><button className="primary-full">Submit booking request</button></form></Modal> }
+function Modal({title,close,children}) { return <div className="modal-backdrop"><div className="modal"><div className="section-header"><h3>{title}</h3><button onClick={close}>×</button></div>{children}</div></div> }
+function Bookings({bookings}) { return <section className="panel-block"><h3>My bookings</h3>{bookings.length?bookings.map(b=><div className="detail-row" key={b.id}><div><strong>{b.package}</strong><p>{b.date} · {b.venue} · {b.guests} guests</p></div><span>{money(b.advance)} advance</span></div>):<div className="empty">Your confirmed and requested events will appear here.</div>}</section> }
+function Orders({orders}) { return <section className="panel-block"><h3>Order history</h3>{orders.length?orders.map(o=><div className="detail-row" key={o.id}><div><strong>{o.id}</strong><p>{o.created_at} · {o.method} · {o.status}</p></div><span>{money(o.total)}</span></div>):<div className="empty">No orders yet.</div>}</section> }
+function Account({auth,setAuth}) { return <section className="panel-block account-page"><div className="avatar">Z</div><h2>My ZIA account</h2>{auth?<><p>Signed in securely. Your orders and bookings are synced across devices.</p><button className="primary-full" onClick={()=>setAuth(false)}>Sign out</button></>:<><p>Sign in to keep your orders and bookings available everywhere.</p><input placeholder="Email address" type="email"/><button className="primary-full" onClick={()=>setAuth(true)}>Continue securely</button></>}</section> }

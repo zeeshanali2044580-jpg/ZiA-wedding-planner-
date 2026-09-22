@@ -1,85 +1,18 @@
-CREATE TABLE IF NOT EXISTS profiles (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  full_name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  phone TEXT,
-  user_type TEXT NOT NULL DEFAULT 'customer',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS wedding_packages (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT NOT NULL,
-  category TEXT NOT NULL,
-  price NUMERIC(12,2) NOT NULL,
-  description TEXT,
-  image_url TEXT,
-  is_featured BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS event_bookings (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id UUID REFERENCES profiles(id),
-  package_id UUID REFERENCES wedding_packages(id),
-  event_date DATE,
-  venue TEXT,
-  guest_count INTEGER,
-  status TEXT NOT NULL DEFAULT 'pending',
-  total_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS electronics_categories (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS electronics_products (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  category_id UUID REFERENCES electronics_categories(id),
-  name TEXT NOT NULL,
-  short_description TEXT,
-  price NUMERIC(12,2) NOT NULL,
-  stock_quantity INTEGER NOT NULL DEFAULT 0,
-  featured BOOLEAN DEFAULT FALSE,
-  image_url TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS orders (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id UUID REFERENCES profiles(id),
-  order_type TEXT NOT NULL DEFAULT 'electronics',
-  status TEXT NOT NULL DEFAULT 'pending',
-  subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
-  shipping_fee NUMERIC(12,2) NOT NULL DEFAULT 0,
-  total NUMERIC(12,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS order_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
-  product_id UUID REFERENCES electronics_products(id),
-  package_id UUID REFERENCES wedding_packages(id),
-  item_name TEXT NOT NULL,
-  quantity INTEGER NOT NULL DEFAULT 1,
-  price NUMERIC(12,2) NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS admin_users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT UNIQUE NOT NULL,
-  full_name TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'admin',
-  is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_event_bookings_customer ON event_bookings(customer_id);
-CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
-CREATE INDEX IF NOT EXISTS idx_products_category ON electronics_products(category_id);
+-- ZIA shared backend schema. Run in Supabase SQL editor.
+create extension if not exists pgcrypto;
+create table if not exists profiles (id uuid primary key references auth.users(id) on delete cascade, full_name text not null default '', email text, phone text, created_at timestamptz not null default now());
+create table if not exists admin_users (id uuid primary key references auth.users(id) on delete cascade, full_name text not null, role text not null default 'admin' check(role in ('admin','manager')), is_active boolean not null default true, created_at timestamptz not null default now());
+create table if not exists electronics_categories (id uuid primary key default gen_random_uuid(), name text unique not null, slug text unique not null, created_at timestamptz not null default now());
+create table if not exists electronics_products (id uuid primary key default gen_random_uuid(), category_id uuid references electronics_categories(id), name text not null, short_description text, description text, price numeric(12,2) not null check(price>=0), stock_quantity integer not null default 0 check(stock_quantity>=0), image_url text, featured boolean not null default false, is_active boolean not null default true, updated_at timestamptz not null default now(), created_at timestamptz not null default now());
+create table if not exists wedding_packages (id uuid primary key default gen_random_uuid(), title text not null, category text not null, description text, price numeric(12,2) not null check(price>=0), image_url text, is_featured boolean not null default false, is_active boolean not null default true, updated_at timestamptz not null default now(), created_at timestamptz not null default now());
+create table if not exists payment_methods (id uuid primary key default gen_random_uuid(), name text unique not null, method_type text not null check(method_type in ('cash','card','digital','bank')), instructions text, is_enabled boolean not null default true, created_at timestamptz not null default now());
+create table if not exists orders (id uuid primary key default gen_random_uuid(), customer_id uuid references profiles(id), status text not null default 'pending', payment_method_id uuid references payment_methods(id), payment_status text not null default 'unpaid', subtotal numeric(12,2) not null default 0, shipping_fee numeric(12,2) not null default 0, total numeric(12,2) not null default 0, delivery_address text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table if not exists order_items (id uuid primary key default gen_random_uuid(), order_id uuid not null references orders(id) on delete cascade, product_id uuid references electronics_products(id), item_name text not null, quantity integer not null check(quantity>0), price numeric(12,2) not null);
+create table if not exists event_bookings (id uuid primary key default gen_random_uuid(), customer_id uuid references profiles(id), package_id uuid references wedding_packages(id), event_date date not null, venue text not null, guest_count integer not null check(guest_count>0), status text not null default 'pending', payment_method_id uuid references payment_methods(id), total_amount numeric(12,2) not null default 0, advance_amount numeric(12,2) not null default 0, payment_status text not null default 'unpaid', notes text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+insert into electronics_categories(name,slug) values ('Smart Watches','smart-watches'),('Earbuds','earbuds'),('Handsfree','handsfree'),('Chargers','chargers') on conflict(name) do nothing;
+insert into payment_methods(name,method_type,instructions) values ('Cash on Delivery','cash','Pay when your order arrives'),('Card payment','card','Secure card payment'),('JazzCash','digital','Use your JazzCash mobile account'),('EasyPaisa','digital','Use your EasyPaisa mobile account'),('Bank transfer','bank','Transfer to the ZIA business account') on conflict(name) do nothing;
+create or replace function is_admin() returns boolean language sql stable security definer set search_path=public as $$ select exists(select 1 from admin_users where id=auth.uid() and is_active=true); $$;
+alter table profiles enable row level security; alter table electronics_products enable row level security; alter table electronics_categories enable row level security; alter table wedding_packages enable row level security; alter table payment_methods enable row level security; alter table orders enable row level security; alter table order_items enable row level security; alter table event_bookings enable row level security; alter table admin_users enable row level security;
+create policy "public active products" on electronics_products for select using(is_active=true or is_admin()); create policy "public categories" on electronics_categories for select using(true); create policy "public active packages" on wedding_packages for select using(is_active=true or is_admin()); create policy "enabled payment methods" on payment_methods for select using(is_enabled=true or is_admin());
+create policy "customers own profile" on profiles for all using(id=auth.uid() or is_admin()) with check(id=auth.uid() or is_admin()); create policy "customers own orders" on orders for select using(customer_id=auth.uid() or is_admin()); create policy "customers create orders" on orders for insert with check(customer_id=auth.uid()); create policy "customers own order items" on order_items for select using(exists(select 1 from orders where orders.id=order_id and (orders.customer_id=auth.uid() or is_admin()))); create policy "customers own bookings" on event_bookings for select using(customer_id=auth.uid() or is_admin()); create policy "customers create bookings" on event_bookings for insert with check(customer_id=auth.uid());
+create policy "admins manage products" on electronics_products for all using(is_admin()) with check(is_admin()); create policy "admins manage packages" on wedding_packages for all using(is_admin()) with check(is_admin()); create policy "admins manage payments" on payment_methods for all using(is_admin()) with check(is_admin()); create policy "admins manage orders" on orders for all using(is_admin()) with check(is_admin()); create policy "admins manage order items" on order_items for all using(is_admin()) with check(is_admin()); create policy "admins manage bookings" on event_bookings for all using(is_admin()) with check(is_admin()); create policy "admins read users" on admin_users for select using(is_admin());
