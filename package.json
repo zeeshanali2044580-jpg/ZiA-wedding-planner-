@@ -8,6 +8,10 @@
     "dev:customer": "npm --workspace apps/customer run dev",
     "dev:admin": "npm --workspace apps/admin run dev",
     "build:customer": "npm --workspace apps/customer run build",
-    "build:admin": "npm --workspace apps/admin run build"
+    "build:admin": "npm --workspace apps/admin run build",
+    "android:customer:sync": "npm --workspace apps/customer run cap:sync",
+    "android:customer:open": "npm --workspace apps/customer run android:open",
+    "android:customer:build": "npm --workspace apps/customer run android:build",
+    "android:customer:bundle": "npm --workspace apps/customer run android:bundle"
   }
 }
