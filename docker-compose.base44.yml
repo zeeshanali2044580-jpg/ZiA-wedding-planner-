@@ -25,6 +25,14 @@ services:
       - /run/base44/app.env
     restart: unless-stopped
 
+  artifacts:
+    image: nginx:alpine
+    volumes:
+      - /tmp/zia-release:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
   admin:
     image: node:22
     working_dir: /app
